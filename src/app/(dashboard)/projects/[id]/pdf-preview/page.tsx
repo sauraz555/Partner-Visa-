@@ -559,16 +559,13 @@ export default function PDFPreviewPage() {
       };
 
       window.getComputedStyle = function(el: Element, pseudoElt?: string | null): any {
-        const style = originalGetComputedStyle(el, pseudoElt);
+        const style = originalGetComputedStyle.call(window, el, pseudoElt);
         return new Proxy(style, {
           get(target, prop, receiver) {
-            if (prop === 'getPropertyValue') {
-              return function(propertyName: string) {
-                const val = target.getPropertyValue(propertyName);
-                return cleanColorStyles(val);
-              };
-            }
             const val = Reflect.get(target, prop, receiver);
+            if (typeof val === 'function') {
+              return val.bind(target);
+            }
             if (typeof val === 'string') {
               return cleanColorStyles(val);
             }
