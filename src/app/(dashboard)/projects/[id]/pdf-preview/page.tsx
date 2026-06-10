@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -440,13 +440,16 @@ export default function PDFPreviewPage() {
 
   const applicantName = project?.applicantName ?? 'Sarah Mitchell';
 
-  const downloadPDF = async () => {
+  const downloadPDF = useCallback(async () => {
     try {
       setDownloading(true);
       notify('info', 'Generating PDF', 'Compiling evidence pages. Please wait...');
       
-      const { jsPDF } = await import('jspdf');
-      const html2canvas = (await import('html2canvas')).default;
+      const jsPDFModule = await import('jspdf');
+      const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default || jsPDFModule;
+
+      const html2canvasModule = await import('html2canvas');
+      const html2canvas = html2canvasModule.default || html2canvasModule;
 
       const doc = new jsPDF({
         orientation: 'portrait',
@@ -456,49 +459,62 @@ export default function PDFPreviewPage() {
 
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
+      let foundPages = 0;
 
       for (let i = 0; i < PAGES.length; i++) {
         const pageElement = document.getElementById(`pdf-page-${i}`);
-        if (!pageElement) continue;
+        if (!pageElement) {
+          console.warn(`Page element pdf-page-${i} not found in DOM`);
+          continue;
+        }
+        foundPages++;
 
         const canvas = await html2canvas(pageElement, {
-          scale: 2, // Retain print quality
+          scale: 1.5, // Memory-efficient and high-quality
           useCORS: true,
-          allowTaint: true,
           logging: false,
           backgroundColor: '#ffffff',
         });
 
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-        if (i > 0) {
+        if (foundPages > 1) {
           doc.addPage();
         }
 
         doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
       }
 
+      if (foundPages === 0) {
+        throw new Error('No preview pages were found in the DOM. Please reload.');
+      }
+
       doc.save(`Relationship_Evidence_${applicantName.replace(/\s+/g, '_')}.pdf`);
       notify('success', 'Download Complete', 'Your PDF has been successfully generated and downloaded.');
     } catch (err: any) {
       console.error('PDF Generation failed:', err);
-      notify('error', 'Generation Failed', 'Could not compile the PDF. Please try again.');
+      notify('error', 'Generation Failed', err.message || 'Could not compile the PDF. Please try again.');
     } finally {
       setDownloading(false);
     }
-  };
+  }, [applicantName, notify]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const query = new URLSearchParams(window.location.search);
       if (query.get('download') === 'true') {
-        downloadPDF();
+        const timer = setTimeout(() => {
+          downloadPDF();
+        }, 1000); // Wait 1s for browser to paint and mount DOM elements
+        
         // Clear query parameter to avoid repeated download on page refreshes
         const newUrl = window.location.pathname;
         window.history.replaceState({}, '', newUrl);
+
+        return () => clearTimeout(timer);
       }
     }
-  }, []);
+  }, [downloadPDF]);
 
   const partnerName = project?.partnerName ?? 'James Chen';
   const visaSubclass = project?.visaSubclass ?? '820';
