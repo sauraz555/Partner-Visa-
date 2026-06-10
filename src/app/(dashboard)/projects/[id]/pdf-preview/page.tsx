@@ -441,6 +441,10 @@ export default function PDFPreviewPage() {
   const applicantName = project?.applicantName ?? 'Sarah Mitchell';
 
   const downloadPDF = useCallback(async () => {
+    // Keep reference to original functions for sandboxing restoration
+    let originalGetComputedStyle: any = null;
+    let originalGetPropertyValue: any = null;
+
     try {
       setDownloading(true);
       notify('info', 'Generating PDF', 'Compiling evidence pages. Please wait...');
@@ -451,6 +455,129 @@ export default function PDFPreviewPage() {
       const html2canvasModule = await import('html2canvas');
       const html2canvas = html2canvasModule.default || html2canvasModule;
 
+      // ─── Color Helper Converters ───
+      const parseAndConvertOklch = (str: string): string => {
+        const regex = /oklch\(\s*([\d\.]+%?)\s+([\d\.]+)\s+([\d\.]+)(?:\s*\/\s*([\d\.]+%?))?\s*\)/i;
+        const match = str.match(regex);
+        if (!match) return str;
+        
+        let l = parseFloat(match[1]);
+        if (match[1].endsWith('%')) l /= 100;
+        const c = parseFloat(match[2]);
+        const h = parseFloat(match[3]);
+        const alphaStr = match[4];
+        
+        let alpha = 1;
+        if (alphaStr) {
+          alpha = parseFloat(alphaStr);
+          if (alphaStr.endsWith('%')) alpha /= 100;
+        }
+        
+        const hRad = (h * Math.PI) / 180;
+        const a = c * Math.cos(hRad);
+        const b = c * Math.sin(hRad);
+        
+        const l_ = l + 0.3963377774 * a + 0.2158037573 * b;
+        const m_ = l - 0.1055613458 * a - 0.0638541728 * b;
+        const s_ = l - 0.0894841775 * a - 1.2914855480 * b;
+        
+        const l3 = l_ * l_ * l_;
+        const m3 = m_ * m_ * m_;
+        const s3 = s_ * s_ * s_;
+        
+        const rL = +4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3;
+        const gL = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3;
+        const bL = -0.0041960863 * l3 - 0.7034186148 * m3 + 1.7076147010 * s3;
+        
+        const f = (x: number) => (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(Math.max(0, x), 1 / 2.4) - 0.055);
+        
+        const rgbR = Math.max(0, Math.min(255, Math.round(f(rL) * 255)));
+        const rgbG = Math.max(0, Math.min(255, Math.round(f(gL) * 255)));
+        const rgbB = Math.max(0, Math.min(255, Math.round(f(bL) * 255)));
+        
+        return alphaStr ? `rgba(${rgbR}, ${rgbG}, ${rgbB}, ${alpha})` : `rgb(${rgbR}, ${rgbG}, ${rgbB})`;
+      };
+
+      const parseAndConvertLab = (str: string): string => {
+        const regex = /lab\(\s*([\d\.]+%?)\s+([\d\.-]+)\s+([\d\.-]+)(?:\s*\/\s*([\d\.]+%?))?\s*\)/i;
+        const match = str.match(regex);
+        if (!match) return str;
+        
+        let l = parseFloat(match[1]);
+        if (match[1].endsWith('%')) l /= 100;
+        const a = parseFloat(match[2]);
+        const b = parseFloat(match[3]);
+        const alphaStr = match[4];
+        
+        const y = (l * 100 + 16) / 116;
+        const x = a / 500 + y;
+        const z = y - b / 200;
+        
+        const xR = x > 0.206897 ? x * x * x : (x - 16/116) / 7.787;
+        const yR = y > 0.206897 ? y * y * y : (y - 16/116) / 7.787;
+        const zR = z > 0.206897 ? z * z * z : (z - 16/116) / 7.787;
+        
+        const rL = xR * 3.2406 + yR * -1.5372 + zR * -0.4986;
+        const gL = xR * -0.9689 + yR * 1.8758 + zR * 0.0415;
+        const bL = xR * 0.0557 + yR * -0.2040 + zR * 1.0570;
+        
+        const f = (x: number) => (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(Math.max(0, x), 1 / 2.4) - 0.055);
+        
+        const rgbR = Math.max(0, Math.min(255, Math.round(f(rL) * 255)));
+        const rgbG = Math.max(0, Math.min(255, Math.round(f(gL) * 255)));
+        const rgbB = Math.max(0, Math.min(255, Math.round(f(bL) * 255)));
+        
+        let alpha = 1;
+        if (alphaStr) {
+          alpha = parseFloat(alphaStr);
+          if (alphaStr.endsWith('%')) alpha /= 100;
+          return `rgba(${rgbR}, ${rgbG}, ${rgbB}, ${alpha})`;
+        }
+        return `rgb(${rgbR}, ${rgbG}, ${rgbB})`;
+      };
+
+      const cleanColorStyles = (value: any): any => {
+        if (typeof value !== 'string') return value;
+        let cleaned = value;
+        
+        const oklchRegex = /oklch\([^\)]+\)/gi;
+        cleaned = cleaned.replace(oklchRegex, (match) => parseAndConvertOklch(match));
+        
+        const labRegex = /lab\([^\)]+\)/gi;
+        cleaned = cleaned.replace(labRegex, (match) => parseAndConvertLab(match));
+        
+        return cleaned;
+      };
+
+      // ─── Monkey Patch DOM Style Resolvers ───
+      originalGetComputedStyle = window.getComputedStyle;
+      originalGetPropertyValue = CSSStyleDeclaration.prototype.getPropertyValue;
+
+      CSSStyleDeclaration.prototype.getPropertyValue = function(propertyName: string) {
+        const val = originalGetPropertyValue.call(this, propertyName);
+        return cleanColorStyles(val);
+      };
+
+      window.getComputedStyle = function(el: Element, pseudoElt?: string | null): any {
+        const style = originalGetComputedStyle(el, pseudoElt);
+        return new Proxy(style, {
+          get(target, prop, receiver) {
+            if (prop === 'getPropertyValue') {
+              return function(propertyName: string) {
+                const val = target.getPropertyValue(propertyName);
+                return cleanColorStyles(val);
+              };
+            }
+            const val = Reflect.get(target, prop, receiver);
+            if (typeof val === 'string') {
+              return cleanColorStyles(val);
+            }
+            return val;
+          }
+        });
+      };
+
+      // ─── PDF Compilation ───
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'pt',
@@ -470,7 +597,7 @@ export default function PDFPreviewPage() {
         foundPages++;
 
         const canvas = await html2canvas(pageElement, {
-          scale: 1.5, // Memory-efficient and high-quality
+          scale: 1.5, // Memory-friendly
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
@@ -495,6 +622,13 @@ export default function PDFPreviewPage() {
       console.error('PDF Generation failed:', err);
       notify('error', 'Generation Failed', err.message || 'Could not compile the PDF. Please try again.');
     } finally {
+      // ─── Restore Original DOM Functions ───
+      if (originalGetComputedStyle) {
+        window.getComputedStyle = originalGetComputedStyle;
+      }
+      if (originalGetPropertyValue) {
+        CSSStyleDeclaration.prototype.getPropertyValue = originalGetPropertyValue;
+      }
       setDownloading(false);
     }
   }, [applicantName, notify]);
