@@ -442,8 +442,7 @@ export default function PDFPreviewPage() {
 
   const downloadPDF = useCallback(async () => {
     // Keep reference to original functions for sandboxing restoration
-    let originalGetPropertyValue: any = null;
-    const originalGetters: Record<string, any> = {};
+    let originalGetComputedStyle: any = null;
 
     try {
       setDownloading(true);
@@ -550,33 +549,69 @@ export default function PDFPreviewPage() {
       };
 
       // ─── Monkey Patch DOM Style Resolvers ───
-      originalGetPropertyValue = CSSStyleDeclaration.prototype.getPropertyValue;
+      originalGetComputedStyle = window.getComputedStyle;
 
-      CSSStyleDeclaration.prototype.getPropertyValue = function(propertyName: string) {
-        const val = originalGetPropertyValue.call(this, propertyName);
-        return cleanColorStyles(val);
-      };
+      window.getComputedStyle = function(el: Element, pseudoElt?: string | null): any {
+        const style = originalGetComputedStyle.call(window, el, pseudoElt);
+        
+        // Create a plain object that inherits from CSSStyleDeclaration.prototype
+        const wrappedStyle = Object.create(CSSStyleDeclaration.prototype);
+        
+        // Define custom getPropertyValue
+        wrappedStyle.getPropertyValue = function(propertyName: string) {
+          const val = style.getPropertyValue(propertyName);
+          return cleanColorStyles(val);
+        };
 
-      const colorProperties = [
-        'color', 'backgroundColor', 'borderColor', 'borderTopColor',
-        'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-        'fill', 'stroke', 'boxShadow', 'outlineColor', 'textDecorationColor'
-      ];
-
-      colorProperties.forEach((prop) => {
-        const desc = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, prop);
-        if (desc && desc.get) {
-          originalGetters[prop] = desc.get;
-          Object.defineProperty(CSSStyleDeclaration.prototype, prop, {
-            get() {
-              const val = originalGetters[prop].call(this);
-              return cleanColorStyles(val);
-            },
-            configurable: true,
-            enumerable: true,
-          });
+        // Collect all properties and methods
+        const keys = new Set<string>();
+        for (const key in style) {
+          keys.add(key);
         }
-      });
+        Object.getOwnPropertyNames(CSSStyleDeclaration.prototype).forEach(key => {
+          keys.add(key);
+        });
+
+        // Delegate all properties and methods to the native style object
+        keys.forEach(key => {
+          if (key === 'getPropertyValue') return;
+          
+          try {
+            const desc = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, key) || 
+                         Object.getOwnPropertyDescriptor(style, key);
+            
+            if (desc && typeof desc.value === 'function') {
+              wrappedStyle[key] = desc.value.bind(style);
+            } else if (typeof (style as any)[key] === 'function') {
+              wrappedStyle[key] = (style as any)[key].bind(style);
+            } else {
+              Object.defineProperty(wrappedStyle, key, {
+                get() {
+                  const val = (style as any)[key];
+                  return cleanColorStyles(val);
+                },
+                configurable: true,
+                enumerable: true
+              });
+            }
+          } catch (e) {
+            // Safe fallback getter
+            Object.defineProperty(wrappedStyle, key, {
+              get() {
+                try {
+                  return cleanColorStyles((style as any)[key]);
+                } catch (err) {
+                  return '';
+                }
+              },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        });
+
+        return wrappedStyle;
+      };
 
       // ─── PDF Compilation ───
       const doc = new jsPDF({
@@ -624,16 +659,9 @@ export default function PDFPreviewPage() {
       notify('error', 'Generation Failed', err.message || 'Could not compile the PDF. Please try again.');
     } finally {
       // ─── Restore Original DOM Functions ───
-      if (originalGetPropertyValue) {
-        CSSStyleDeclaration.prototype.getPropertyValue = originalGetPropertyValue;
+      if (originalGetComputedStyle) {
+        window.getComputedStyle = originalGetComputedStyle;
       }
-      Object.keys(originalGetters).forEach((prop) => {
-        Object.defineProperty(CSSStyleDeclaration.prototype, prop, {
-          get: originalGetters[prop],
-          configurable: true,
-          enumerable: true,
-        });
-      });
       setDownloading(false);
     }
   }, [applicantName, notify]);
