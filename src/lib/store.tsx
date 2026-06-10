@@ -236,12 +236,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state]);
 
-  const login = async (email: string, _password: string): Promise<boolean> => {
-    // Demo auth — accept any email
+  const login = async (email: string, password: string): Promise<boolean> => {
+    // Enforce credentials: admin@gmail.com / password123
+    if (email.trim().toLowerCase() !== 'admin@gmail.com' || password !== 'password123') {
+      return false;
+    }
+
     const user: User = {
       ...DEMO_USER,
-      email,
-      name: email.split('@')[0].replace(/[._]/g, ' '),
+      email: 'admin@gmail.com',
+      name: 'Admin User',
+      role: 'admin',
     };
     dispatch({ type: 'LOGIN', payload: user });
     dispatch({ type: 'SET_PROJECTS', payload: DEMO_PROJECTS });

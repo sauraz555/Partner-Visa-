@@ -360,7 +360,7 @@ export default function LoginPage() {
             {/* Demo note */}
             <div className="mt-5 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
               <p className="text-xs text-blue-700 text-center leading-relaxed">
-                <span className="font-semibold">Demo mode:</span> Use any email address and any password (6+ characters) to log in instantly.
+                <span className="font-semibold">Demo mode:</span> Use email <code className="bg-blue-100/50 px-1.5 py-0.5 rounded text-blue-800 font-mono">admin@gmail.com</code> and password <code className="bg-blue-100/50 px-1.5 py-0.5 rounded text-blue-800 font-mono">password123</code> to log in.
               </p>
             </div>
           </div>
