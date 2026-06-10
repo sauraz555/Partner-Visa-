@@ -1,26 +1,574 @@
+@import url('https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700');
+
 @import "tailwindcss";
 
+/* ============================================================
+   Interlace Design Tokens
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+
+  /* Colours */
+  --color-bg: #fdfdfc;
+  --color-card: #ffffff;
+  --color-text: #111827;
+  --color-heading: #000000;
+  --color-muted: #6B7280;
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-badge-bg: #DBEAFE;
+  --color-badge-text: #1D4ED8;
+  --color-border: #E5E7EB;
+  --color-border-light: #F3F4F6;
+  --color-highlight: #EFF6FF;
+  --color-footer-bg: #171717;
+  --color-footer-text: #D1D5DB;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-nav: 0 4px 16px -4px rgb(0 0 0 / 0.08), 0 2px 8px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 10px 40px -8px rgb(0 0 0 / 0.12);
+
+  /* Spacing */
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-pill: 9999px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  --color-bg: #0f0f0f;
+  --color-card: #1a1a1a;
+  --color-text: #f1f5f9;
+  --color-heading: #ffffff;
+  --color-muted: #94a3b8;
+  --color-border: #262626;
+  --color-border-light: #1f1f1f;
+  --color-highlight: #172554;
+  --color-badge-bg: #1e3a5f;
+  --color-badge-text: #93c5fd;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ============================================================
+   Global Base
+   ============================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ============================================================
+   Scrollbar Styling
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #404040;
+}
+
+/* ============================================================
+   Typography
+   ============================================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--color-heading);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.text-muted {
+  color: var(--color-muted);
+}
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* ============================================================
+   Interlace Card
+   ============================================================ */
+
+.card {
+  background: var(--color-card);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-card);
+  padding: 1.5rem;
+}
+
+.card-hover {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.card-hover:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+  background-color: var(--color-primary);
+  border-radius: var(--radius-btn);
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  background-color: white;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background-color: #f9fafb;
+}
+
+.dark .btn-secondary {
+  color: #d1d5db;
+  background-color: #1a1a1a;
+  border-color: #333;
+}
+
+.dark .btn-secondary:hover {
+  background-color: #222;
+}
+
+/* ============================================================
+   Status Pills
+   ============================================================ */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pill-blue {
+  background-color: var(--color-badge-bg);
+  color: var(--color-badge-text);
+}
+
+.pill-green {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.pill-amber {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.pill-red {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.pill-gray {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+.pill-orange {
+  background-color: #fed7aa;
+  color: #92400e;
+}
+
+/* ============================================================
+   Inputs
+   ============================================================ */
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn);
+  background: var(--color-card);
+  color: var(--color-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
+}
+
+.input::placeholder {
+  color: var(--color-muted);
+}
+
+.dark .input {
+  background: #1a1a1a;
+  border-color: #333;
+  color: #f1f5f9;
+}
+
+/* ============================================================
+   Navigation
+   ============================================================ */
+
+.nav-floating {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(229, 231, 235, 0.6);
+  box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+}
+
+.dark .nav-floating {
+  background: rgba(26, 26, 26, 0.95);
+  border-color: rgba(38, 38, 38, 0.8);
+}
+
+/* ============================================================
+   Upload Zone
+   ============================================================ */
+
+.upload-zone {
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  background: #f9fafb;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--color-primary);
+  background: #eff6ff;
+}
+
+.dark .upload-zone {
+  border-color: #333;
+  background: #1a1a1a;
+}
+
+.dark .upload-zone:hover {
+  border-color: #3b82f6;
+  background: #172554;
+}
+
+/* ============================================================
+   Progress Bar
+   ============================================================ */
+
+.progress-bar {
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* ============================================================
+   Timeline
+   ============================================================ */
+
+.timeline-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e5e7eb;
+  transform: translateX(-50%);
+}
+
+.dark .timeline-line {
+  background: #333;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 3px solid white;
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.dark .timeline-dot {
+  border-color: #1a1a1a;
+}
+
+/* ============================================================
+   Evidence Grid
+   ============================================================ */
+
+.evidence-thumb {
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: 8px;
+  width: 100%;
+  background: #f3f4f6;
+  display: block;
+}
+
+.evidence-card {
+  border-radius: 10px;
+  border: 2px solid transparent;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.evidence-card:hover {
+  border-color: var(--color-primary);
+  transform: scale(1.01);
+}
+
+.evidence-card.selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.evidence-card.excluded {
+  opacity: 0.4;
+}
+
+/* ============================================================
+   Processing States
+   ============================================================ */
+
+.processing-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+.dark .skeleton {
+  background: linear-gradient(90deg, #1a1a1a 25%, #262626 50%, #1a1a1a 75%);
+  background-size: 200% 100%;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ============================================================
+   PDF Preview
+   ============================================================ */
+
+.pdf-page {
+  background: white;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  aspect-ratio: 210/297; /* A4 */
+  overflow: hidden;
+  position: relative;
+}
+
+.pdf-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.pdf-watermark-text {
+  font-size: 5rem;
+  font-weight: 800;
+  color: rgba(37, 99, 235, 0.06);
+  transform: rotate(-30deg);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* ============================================================
+   Dashboard Sidebar
+   ============================================================ */
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #4b5563;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.sidebar-link:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.sidebar-link.active {
+  background: #eff6ff;
+  color: var(--color-primary);
+}
+
+.dark .sidebar-link {
+  color: #9ca3af;
+}
+
+.dark .sidebar-link:hover {
+  background: #1f1f1f;
+  color: #f1f5f9;
+}
+
+.dark .sidebar-link.active {
+  background: #172554;
+  color: #93c5fd;
+}
+
+/* ============================================================
+   Page transitions
+   ============================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* ============================================================
+   Gradient Accents
+   ============================================================ */
+
+.gradient-text {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-accent {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+}
+
+/* ============================================================
+   Responsive Utilities
+   ============================================================ */
+
+.container-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-page {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-page {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* ============================================================
+   Print Styles
+   ============================================================ */
+
+@media print {
+  nav, aside, .no-print {
+    display: none !important;
+  }
 }
