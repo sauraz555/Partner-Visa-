@@ -553,64 +553,24 @@ export default function PDFPreviewPage() {
 
       window.getComputedStyle = function(el: Element, pseudoElt?: string | null): any {
         const style = originalGetComputedStyle.call(window, el, pseudoElt);
-        
-        // Create a plain object that inherits from CSSStyleDeclaration.prototype
-        const wrappedStyle = Object.create(CSSStyleDeclaration.prototype);
-        
-        // Define custom getPropertyValue
-        wrappedStyle.getPropertyValue = function(propertyName: string) {
-          const val = style.getPropertyValue(propertyName);
-          return cleanColorStyles(val);
-        };
-
-        // Collect all properties and methods
-        const keys = new Set<string>();
-        for (const key in style) {
-          keys.add(key);
-        }
-        Object.getOwnPropertyNames(CSSStyleDeclaration.prototype).forEach(key => {
-          keys.add(key);
-        });
-
-        // Delegate all properties and methods to the native style object
-        keys.forEach(key => {
-          if (key === 'getPropertyValue') return;
-          
-          try {
-            const desc = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, key) || 
-                         Object.getOwnPropertyDescriptor(style, key);
-            
-            if (desc && typeof desc.value === 'function') {
-              wrappedStyle[key] = desc.value.bind(style);
-            } else if (typeof (style as any)[key] === 'function') {
-              wrappedStyle[key] = (style as any)[key].bind(style);
-            } else {
-              Object.defineProperty(wrappedStyle, key, {
-                get() {
-                  const val = (style as any)[key];
-                  return cleanColorStyles(val);
-                },
-                configurable: true,
-                enumerable: true
-              });
+        return new Proxy(style, {
+          get(target, prop) {
+            if (prop === 'getPropertyValue') {
+              return function(propertyName: string) {
+                const val = target.getPropertyValue(propertyName);
+                return typeof val === 'string' ? cleanColorStyles(val) : val;
+              };
             }
-          } catch (e) {
-            // Safe fallback getter
-            Object.defineProperty(wrappedStyle, key, {
-              get() {
-                try {
-                  return cleanColorStyles((style as any)[key]);
-                } catch (err) {
-                  return '';
-                }
-              },
-              configurable: true,
-              enumerable: true
-            });
+            const val = Reflect.get(target, prop);
+            if (typeof val === 'function') {
+              return val.bind(target);
+            }
+            if (typeof val === 'string') {
+              return cleanColorStyles(val);
+            }
+            return val;
           }
         });
-
-        return wrappedStyle;
       };
 
       // ─── PDF Compilation ───
