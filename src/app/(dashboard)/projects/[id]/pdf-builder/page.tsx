@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import {
   FileText,
@@ -263,6 +264,7 @@ const MOCK_EVIDENCE_ITEMS = [
 
 export default function PDFBuilderPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const { getProject, getEvidence } = useApp();
   const project = getProject(params.id);
 
@@ -314,6 +316,7 @@ export default function PDFBuilderPage() {
     setGenerating('draft');
     await new Promise((r) => setTimeout(r, 2000));
     setGenerating(null);
+    router.push(`/projects/${params.id}/pdf-preview?download=true`);
   };
 
   const handleGenerateFinal = async () => {
@@ -321,6 +324,7 @@ export default function PDFBuilderPage() {
     setGenerating('final');
     await new Promise((r) => setTimeout(r, 2500));
     setGenerating(null);
+    router.push(`/projects/${params.id}/pdf-preview?download=true`);
   };
 
   return (
@@ -522,10 +526,13 @@ export default function PDFBuilderPage() {
                 <Wand2 className="w-4 h-4 text-blue-600" />
                 Auto-build recommended
               </button>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all">
+              <Link
+                href={`/projects/${params.id}/pdf-preview`}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
+              >
                 <Eye className="w-4 h-4" />
                 Preview PDF
-              </button>
+              </Link>
               <button
                 onClick={handleGenerateDraft}
                 disabled={generating !== null}

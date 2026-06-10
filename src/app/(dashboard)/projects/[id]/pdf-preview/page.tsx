@@ -14,6 +14,7 @@ import {
   ChevronRight,
   FileText,
   Shield,
+  Clock,
 } from 'lucide-react';
 import { useApp } from '@/lib/store';
 import { cn, formatDate } from '@/lib/utils';
@@ -422,7 +423,7 @@ function DeclarationPage({
 
 export default function PDFPreviewPage() {
   const params = useParams<{ id: string }>();
-  const { getProject } = useApp();
+  const { getProject, notify } = useApp();
   const project = getProject(params.id);
 
   const [zoom, setZoom] = useState(100);
@@ -434,8 +435,71 @@ export default function PDFPreviewPage() {
   const [requestNote, setRequestNote] = useState('');
   const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  
+  const [downloading, setDownloading] = useState(false);
 
   const applicantName = project?.applicantName ?? 'Sarah Mitchell';
+
+  const downloadPDF = async () => {
+    try {
+      setDownloading(true);
+      notify('info', 'Generating PDF', 'Compiling evidence pages. Please wait...');
+      
+      const { jsPDF } = await import('jspdf');
+      const html2canvas = (await import('html2canvas')).default;
+
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'a4',
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      for (let i = 0; i < PAGES.length; i++) {
+        const pageElement = document.getElementById(`pdf-page-${i}`);
+        if (!pageElement) continue;
+
+        const canvas = await html2canvas(pageElement, {
+          scale: 2, // Retain print quality
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+        if (i > 0) {
+          doc.addPage();
+        }
+
+        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+      }
+
+      doc.save(`Relationship_Evidence_${applicantName.replace(/\s+/g, '_')}.pdf`);
+      notify('success', 'Download Complete', 'Your PDF has been successfully generated and downloaded.');
+    } catch (err: any) {
+      console.error('PDF Generation failed:', err);
+      notify('error', 'Generation Failed', 'Could not compile the PDF. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const query = new URLSearchParams(window.location.search);
+      if (query.get('download') === 'true') {
+        downloadPDF();
+        // Clear query parameter to avoid repeated download on page refreshes
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, []);
+
   const partnerName = project?.partnerName ?? 'James Chen';
   const visaSubclass = project?.visaSubclass ?? '820';
 
@@ -598,9 +662,23 @@ export default function PDFPreviewPage() {
           {approved ? 'Approved' : 'Approve document'}
         </button>
 
-        <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm hover:shadow-md">
-          <Download className="w-4 h-4" />
-          Download PDF
+        <button
+          onClick={downloadPDF}
+          disabled={downloading}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm hover:shadow-md disabled:opacity-50"
+        >
+          {downloading ? (
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+              className="shrink-0"
+            >
+              <Clock className="w-4 h-4" />
+            </motion.div>
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
+          {downloading ? 'Generating...' : 'Download PDF'}
         </button>
       </div>
 
@@ -634,6 +712,7 @@ export default function PDFPreviewPage() {
 
                 {/* A4 page card */}
                 <div
+                  id={`pdf-page-${index}`}
                   className="bg-white rounded-sm shadow-md overflow-hidden border border-gray-200"
                   style={{
                     // A4 ratio: 210x297mm = 1:1.414

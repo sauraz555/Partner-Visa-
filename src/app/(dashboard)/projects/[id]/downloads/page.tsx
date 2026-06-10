@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Download,
@@ -40,9 +40,14 @@ interface ShareLink {
 export default function DownloadsPage() {
   const params = useParams();
   const projectId = params.id as string;
+  const router = useRouter();
   const { getProject, notify } = useApp();
 
   const project = getProject(projectId);
+
+  const handleDownload = () => {
+    router.push(`/projects/${projectId}/pdf-preview?download=true`);
+  };
 
   // States
   const [recipientEmail, setRecipientEmail] = useState('');
@@ -131,14 +136,14 @@ export default function DownloadsPage() {
 
         <div className="flex flex-wrap gap-2.5 w-full md:w-auto">
           <button
-            onClick={() => notify('success', 'Download Started', 'Downloading screen-optimised version.')}
+            onClick={handleDownload}
             className="flex-1 md:flex-initial px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm shadow-blue-500/10"
           >
             <Download className="w-3.5 h-3.5" />
             Screen-Optimised PDF
           </button>
           <button
-            onClick={() => notify('success', 'Download Started', 'Downloading print-quality version.')}
+            onClick={handleDownload}
             className="flex-1 md:flex-initial px-4 py-2 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"
           >
             <Download className="w-3.5 h-3.5" />
@@ -196,7 +201,7 @@ export default function DownloadsPage() {
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <button
-                      onClick={() => notify('success', 'Download Started', `Downloading version ${v.version}`)}
+                      onClick={handleDownload}
                       className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
                     >
                       Download <Download className="w-3.5 h-3.5" />
