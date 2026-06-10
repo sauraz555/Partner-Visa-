@@ -12,6 +12,39 @@ import type {
   AuditEvent,
 } from '@/lib/types';
 import { DEMO_PROJECTS, DEMO_EVIDENCE, DEMO_USER, DEMO_MILESTONES } from '@/lib/mock-data';
+import { supabase, hasSupabaseConfig } from './supabase';
+
+// ============================================================
+// Case Conversion Helpers for Postgres (snake_case)
+// ============================================================
+
+function camelToSnake(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(camelToSnake);
+  if (obj !== null && typeof obj === 'object') {
+    const n: any = {};
+    for (const key of Object.keys(obj)) {
+      const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+      n[snakeKey] = camelToSnake(obj[key]);
+    }
+    return n;
+  }
+  return obj;
+}
+
+function snakeToCamel(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(snakeToCamel);
+  if (obj !== null && typeof obj === 'object') {
+    const n: any = {};
+    for (const key of Object.keys(obj)) {
+      const camelKey = key.replace(/([-_][a-z])/g, (group) =>
+        group.toUpperCase().replace('-', '').replace('_', '')
+      );
+      n[camelKey] = snakeToCamel(obj[key]);
+    }
+    return n;
+  }
+  return obj;
+}
 
 // ============================================================
 // State Shape
@@ -184,6 +217,7 @@ interface AppContextValue {
   getEvidence: (projectId: string) => EvidenceFile[];
   getMilestones: (projectId: string) => TimelineMilestone[];
   notify: (type: Notification['type'], title: string, message?: string) => void;
+  syncDatabase: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -195,34 +229,120 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  // Helper notification dispatcher
+  const notify = (type: Notification['type'], title: string, message?: string) => {
+    dispatch({ type: 'ADD_NOTIFICATION', payload: { type, title, message } });
+  };
+
+  // Database fetch helper
+  const syncDatabase = async () => {
+    if (!hasSupabaseConfig) return;
+
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.user) return;
+
+      // Fetch projects
+      const { data: dbProjects, error: projError } = await supabase
+        .from('projects')
+        .select('*');
+
+      if (projError) throw projError;
+
+      if (dbProjects && dbProjects.length > 0) {
+        const camelProjects = snakeToCamel(dbProjects) as Project[];
+        dispatch({ type: 'SET_PROJECTS', payload: camelProjects });
+        
+        // Set active project
+        if (camelProjects[0]) {
+          dispatch({ type: 'SET_ACTIVE_PROJECT', payload: camelProjects[0].id });
+        }
+
+        // Fetch evidence and milestones for each project
+        for (const proj of camelProjects) {
+          const { data: dbEvidence, error: evError } = await supabase
+            .from('evidence_files')
+            .select('*')
+            .eq('project_id', proj.id);
+
+          if (!evError && dbEvidence) {
+            dispatch({
+              type: 'SET_EVIDENCE',
+              payload: { projectId: proj.id, files: snakeToCamel(dbEvidence) },
+            });
+          }
+
+          const { data: dbMilestones, error: msError } = await supabase
+            .from('timeline_milestones')
+            .select('*')
+            .eq('project_id', proj.id);
+
+          if (!msError && dbMilestones) {
+            dispatch({
+              type: 'SET_MILESTONES',
+              payload: { projectId: proj.id, milestones: snakeToCamel(dbMilestones) },
+            });
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('Supabase Sync Failed:', err.message);
+      notify(
+        'warning',
+        'Database Sync Failed',
+        'Could not load tables. Please verify you executed supabase_schema.sql in your Supabase SQL Editor.'
+      );
+    }
+  };
+
   // Load persisted state on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('interlace-app-state');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        dispatch({ type: 'HYDRATE', payload: parsed });
-      } else {
-        // Load demo data for first-time users
-        dispatch({ type: 'LOGIN', payload: DEMO_USER });
-        dispatch({ type: 'SET_PROJECTS', payload: DEMO_PROJECTS });
-        dispatch({
-          type: 'SET_EVIDENCE',
-          payload: { projectId: DEMO_PROJECTS[0].id, files: DEMO_EVIDENCE },
-        });
-        dispatch({
-          type: 'SET_MILESTONES',
-          payload: { projectId: DEMO_PROJECTS[0].id, milestones: DEMO_MILESTONES },
-        });
+    const initData = async () => {
+      try {
+        if (hasSupabaseConfig) {
+          const { data: session } = await supabase.auth.getSession();
+          if (session.session?.user) {
+            const user: User = {
+              ...DEMO_USER,
+              id: session.session.user.id,
+              email: session.session.user.email || 'admin@gmail.com',
+              name: 'Admin User',
+              role: 'admin',
+            };
+            dispatch({ type: 'LOGIN', payload: user });
+            await syncDatabase();
+            return;
+          }
+        }
+
+        // Fallback to localStorage / Demo Data
+        const saved = localStorage.getItem('interlace-app-state');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          dispatch({ type: 'HYDRATE', payload: parsed });
+        } else {
+          // Load demo data for first-time users
+          dispatch({ type: 'LOGIN', payload: DEMO_USER });
+          dispatch({ type: 'SET_PROJECTS', payload: DEMO_PROJECTS });
+          dispatch({
+            type: 'SET_EVIDENCE',
+            payload: { projectId: DEMO_PROJECTS[0].id, files: DEMO_EVIDENCE },
+          });
+          dispatch({
+            type: 'SET_MILESTONES',
+            payload: { projectId: DEMO_PROJECTS[0].id, milestones: DEMO_MILESTONES },
+          });
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
+    };
+    initData();
   }, []);
 
-  // Persist state changes
+  // Persist state changes to localStorage (for fallback mode)
   useEffect(() => {
-    if (state.isAuthenticated) {
+    if (state.isAuthenticated && !hasSupabaseConfig) {
       const toSave = {
         user: state.user,
         isAuthenticated: state.isAuthenticated,
@@ -237,18 +357,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Enforce credentials: admin@gmail.com / password123
+    // Check credentials
     if (email.trim().toLowerCase() !== 'admin@gmail.com' || password !== 'password123') {
       return false;
     }
 
-    const user: User = {
-      ...DEMO_USER,
-      email: 'admin@gmail.com',
-      name: 'Admin User',
-      role: 'admin',
-    };
-    dispatch({ type: 'LOGIN', payload: user });
+    if (hasSupabaseConfig) {
+      try {
+        // Try authenticating with Supabase auth (mock/auto-create if needed or check session)
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: 'admin@gmail.com',
+          password: 'password123',
+        });
+
+        // If user doesn't exist, register them
+        if (error && error.message.includes('Invalid login credentials')) {
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: 'admin@gmail.com',
+            password: 'password123',
+          });
+          if (signUpError) throw signUpError;
+          if (signUpData.user) {
+            // Recurse to login
+            return login(email, password);
+          }
+        } else if (error) {
+          throw error;
+        }
+
+        if (data.user) {
+          const user: User = {
+            ...DEMO_USER,
+            id: data.user.id,
+            email: 'admin@gmail.com',
+            name: 'Admin User',
+            role: 'admin',
+          };
+          dispatch({ type: 'LOGIN', payload: user });
+          
+          // Sync schemas and tables
+          await syncDatabase();
+          return true;
+        }
+      } catch (err: any) {
+        console.error('Supabase Auth error:', err.message);
+        notify(
+          'error',
+          'Authentication Error',
+          'Failed to authenticate with Supabase. Running local mode.'
+        );
+      }
+    }
+
+    // Local Mock Fallback login
+    dispatch({ type: 'LOGIN', payload: DEMO_USER });
     dispatch({ type: 'SET_PROJECTS', payload: DEMO_PROJECTS });
     dispatch({
       type: 'SET_EVIDENCE',
@@ -261,8 +423,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
-  const logout = () => {
+  const logout = async () => {
     localStorage.removeItem('interlace-app-state');
+    if (hasSupabaseConfig) {
+      await supabase.auth.signOut();
+    }
     dispatch({ type: 'LOGOUT' });
   };
 
@@ -272,13 +437,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const getMilestones = (projectId: string) => state.milestones[projectId] || [];
 
-  const notify = (type: Notification['type'], title: string, message?: string) => {
-    dispatch({ type: 'ADD_NOTIFICATION', payload: { type, title, message } });
+  // Override context dispatch to trigger database updates
+  const customDispatch = async (action: Action) => {
+    // Perform standard local reduction first for immediate UI responsiveness
+    dispatch(action);
+
+    if (!hasSupabaseConfig) return;
+
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.user) return;
+
+      if (action.type === 'ADD_PROJECT') {
+        const snakeProj = camelToSnake(action.payload);
+        snakeProj.user_id = session.session.user.id;
+        const { error } = await supabase.from('projects').insert(snakeProj);
+        if (error) throw error;
+      } else if (action.type === 'UPDATE_PROJECT') {
+        const { error } = await supabase
+          .from('projects')
+          .update(camelToSnake(action.payload))
+          .eq('id', action.payload.id);
+        if (error) throw error;
+      } else if (action.type === 'UPDATE_EVIDENCE') {
+        const file = action.payload.file;
+        const { error } = await supabase
+          .from('evidence_files')
+          .update(camelToSnake(file))
+          .eq('id', file.id);
+        if (error) throw error;
+      } else if (action.type === 'ADD_EVIDENCE') {
+        const file = action.payload.file;
+        const { error } = await supabase
+          .from('evidence_files')
+          .insert(camelToSnake(file));
+        if (error) throw error;
+      }
+    } catch (err: any) {
+      console.warn('Database Write Failed:', err.message);
+      // Fail silently or notify on critical writes
+    }
   };
 
   return (
     <AppContext.Provider
-      value={{ state, dispatch, login, logout, getProject, getEvidence, getMilestones, notify }}
+      value={{
+        state,
+        dispatch: customDispatch,
+        login,
+        logout,
+        getProject,
+        getEvidence,
+        getMilestones,
+        notify,
+        syncDatabase,
+      }}
     >
       {children}
     </AppContext.Provider>

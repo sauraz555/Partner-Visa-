@@ -6,6 +6,7 @@ import { useState, useReducer, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '@/lib/store';
 import type { EvidenceCategory, ProcessingStage } from '@/lib/types';
 import { formatFileSize, cn, generateId } from '@/lib/utils';
+import { uploadFileToSupabase, hasSupabaseConfig } from '@/lib/supabase';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -370,12 +371,20 @@ export default function UploadPage() {
       // Add to recent items after processing completes
       items.forEach((item, idx) => {
         const totalDelay = idx * 300 + PROCESSING_STAGES.length * 600 + 100;
-        setTimeout(() => {
+        setTimeout(async () => {
+          let finalPreviewUrl = item.previewUrl;
+          if (hasSupabaseConfig) {
+            const publicUrl = await uploadFileToSupabase(projectId, item.id, item.file);
+            if (publicUrl) {
+              finalPreviewUrl = publicUrl;
+            }
+          }
+
           setRecentItems((prev) => [
             {
               id: item.id,
               filename: item.file.name,
-              previewUrl: item.previewUrl,
+              previewUrl: finalPreviewUrl,
               category: item.category,
               status: 'ready',
             },
@@ -389,8 +398,8 @@ export default function UploadPage() {
             originalFilename: item.file.name,
             mimeType: item.file.type,
             sizeBytes: item.file.size,
-            thumbnailUrl: item.previewUrl || undefined,
-            previewUrl: item.previewUrl || undefined,
+            thumbnailUrl: finalPreviewUrl || undefined,
+            previewUrl: finalPreviewUrl || undefined,
             status: 'ready' as const,
             processingStage: 'ready' as const,
             suggestedCategory: item.category ?? undefined,
