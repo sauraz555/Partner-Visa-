@@ -442,8 +442,8 @@ export default function PDFPreviewPage() {
 
   const downloadPDF = useCallback(async () => {
     // Keep reference to original functions for sandboxing restoration
-    let originalGetComputedStyle: any = null;
     let originalGetPropertyValue: any = null;
+    const originalGetters: Record<string, any> = {};
 
     try {
       setDownloading(true);
@@ -550,7 +550,6 @@ export default function PDFPreviewPage() {
       };
 
       // ─── Monkey Patch DOM Style Resolvers ───
-      originalGetComputedStyle = window.getComputedStyle;
       originalGetPropertyValue = CSSStyleDeclaration.prototype.getPropertyValue;
 
       CSSStyleDeclaration.prototype.getPropertyValue = function(propertyName: string) {
@@ -558,21 +557,26 @@ export default function PDFPreviewPage() {
         return cleanColorStyles(val);
       };
 
-      window.getComputedStyle = function(el: Element, pseudoElt?: string | null): any {
-        const style = originalGetComputedStyle.call(window, el, pseudoElt);
-        return new Proxy(style, {
-          get(target, prop, receiver) {
-            const val = Reflect.get(target, prop, receiver);
-            if (typeof val === 'function') {
-              return val.bind(target);
-            }
-            if (typeof val === 'string') {
+      const colorProperties = [
+        'color', 'backgroundColor', 'borderColor', 'borderTopColor',
+        'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+        'fill', 'stroke', 'boxShadow', 'outlineColor', 'textDecorationColor'
+      ];
+
+      colorProperties.forEach((prop) => {
+        const desc = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, prop);
+        if (desc && desc.get) {
+          originalGetters[prop] = desc.get;
+          Object.defineProperty(CSSStyleDeclaration.prototype, prop, {
+            get() {
+              const val = originalGetters[prop].call(this);
               return cleanColorStyles(val);
-            }
-            return val;
-          }
-        });
-      };
+            },
+            configurable: true,
+            enumerable: true,
+          });
+        }
+      });
 
       // ─── PDF Compilation ───
       const doc = new jsPDF({
@@ -620,12 +624,16 @@ export default function PDFPreviewPage() {
       notify('error', 'Generation Failed', err.message || 'Could not compile the PDF. Please try again.');
     } finally {
       // ─── Restore Original DOM Functions ───
-      if (originalGetComputedStyle) {
-        window.getComputedStyle = originalGetComputedStyle;
-      }
       if (originalGetPropertyValue) {
         CSSStyleDeclaration.prototype.getPropertyValue = originalGetPropertyValue;
       }
+      Object.keys(originalGetters).forEach((prop) => {
+        Object.defineProperty(CSSStyleDeclaration.prototype, prop, {
+          get: originalGetters[prop],
+          configurable: true,
+          enumerable: true,
+        });
+      });
       setDownloading(false);
     }
   }, [applicantName, notify]);
